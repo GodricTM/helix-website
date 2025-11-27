@@ -426,16 +426,30 @@ function App() {
         contactInfo={contactInfo}
       />
 
-      {/* Scroll to Bottom Button */}
-      <button
-        onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-        className="fixed bottom-6 right-6 z-40 bg-bronze-600 hover:bg-bronze-500 text-white p-3 rounded-full shadow-lg transition-all duration-300 hover:scale-110 group"
-        title="Scroll to Bottom"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
-      </button>
+      {/* Scroll Buttons Container */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
+        {/* Scroll to Top */}
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="bg-bronze-600 hover:bg-bronze-500 text-white p-3 rounded-full shadow-lg transition-all duration-300 hover:scale-110 group"
+          title="Scroll to Top"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
+
+        {/* Scroll to Bottom */}
+        <button
+          onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+          className="bg-garage-800 hover:bg-garage-700 text-garage-300 hover:text-white p-3 rounded-full shadow-lg transition-all duration-300 hover:scale-110 group border border-garage-700"
+          title="Scroll to Bottom"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </button>
+      </div>
 
       <main>
         {currentPage === 'home' ? (
