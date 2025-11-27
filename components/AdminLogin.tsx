@@ -17,6 +17,10 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
+      if (!supabase) {
+        throw new Error("Database connection failed. Please check environment variables.");
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,

@@ -6,14 +6,16 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let client = null;
 
 if (supabaseUrl && supabaseAnonKey) {
+    let validUrl = supabaseUrl;
     if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
-        console.error('Invalid VITE_SUPABASE_URL: Must start with http:// or https://');
-    } else {
-        try {
-            client = createClient(supabaseUrl, supabaseAnonKey);
-        } catch (e) {
-            console.error('Failed to initialize Supabase client:', e);
-        }
+        console.warn('VITE_SUPABASE_URL missing protocol. Appending https://');
+        validUrl = `https://${supabaseUrl}`;
+    }
+
+    try {
+        client = createClient(validUrl, supabaseAnonKey);
+    } catch (e) {
+        console.error('Failed to initialize Supabase client:', e);
     }
 } else {
     console.error('Missing Supabase environment variables. Please check .env.local');

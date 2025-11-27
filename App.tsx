@@ -345,13 +345,22 @@ function App() {
 
   }, [contactInfo.theme]);
 
-  // Force scroll to top on initial page load / refresh
+  // 1. Immediate scroll to top on mount (before content loads)
   useEffect(() => {
     window.scrollTo(0, 0);
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual';
     }
   }, []);
+
+  // 2. Ensure it stays at top after loading finishes (handling layout shifts)
+  useEffect(() => {
+    if (!loading) {
+      window.scrollTo(0, 0);
+      // Double-check after a brief delay to catch any late rendering
+      setTimeout(() => window.scrollTo(0, 0), 50);
+    }
+  }, [loading]);
 
   const navigateTo = (page: 'home' | 'projects' | 'admin_login') => {
     setCurrentPage(page);
