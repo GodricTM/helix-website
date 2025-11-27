@@ -7,9 +7,17 @@ let client = null;
 
 if (supabaseUrl && supabaseAnonKey) {
     let validUrl = supabaseUrl;
-    if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
+
+    // 1. Check if it's just a Project ID (no dots, e.g., "abcdefghijklm")
+    if (!validUrl.includes('.')) {
+        console.warn('VITE_SUPABASE_URL looks like a Project ID. Constructing full URL.');
+        validUrl = `https://${validUrl}.supabase.co`;
+    }
+
+    // 2. Ensure Protocol is https://
+    if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://')) {
         console.warn('VITE_SUPABASE_URL missing protocol. Appending https://');
-        validUrl = `https://${supabaseUrl}`;
+        validUrl = `https://${validUrl}`;
     }
 
     try {
