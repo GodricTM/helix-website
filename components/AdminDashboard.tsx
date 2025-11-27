@@ -19,7 +19,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   services, onUpdateServices,
   onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'helix' | 'services' | 'showroom' | 'reviews' | 'projects' | 'themes'>('helix');
+  const [activeTab, setActiveTab] = useState<'general' | 'services' | 'reviews' | 'projects' | 'themes' | 'messages'>('general');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
