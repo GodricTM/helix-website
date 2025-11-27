@@ -164,21 +164,25 @@ function App() {
     fetchData();
 
     // Auth Listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        // User is signed in
-        // If we were on the login page, move to dashboard
-        // If we were on dashboard, stay there
-      } else {
-        // User is signed out
-        // If we were on dashboard, move to login or home
-        if (currentPage === 'admin_dashboard') {
-          setCurrentPage('admin_login');
-        }
-      }
-    });
+    let authListener: { subscription: { unsubscribe: () => void } } | null = null;
 
-    return () => subscription.unsubscribe();
+    if (supabase) {
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) {
+          // User is signed in
+        } else {
+          // User is signed out
+          if (currentPage === 'admin_dashboard') {
+            setCurrentPage('admin_login');
+          }
+        }
+      });
+      authListener = data;
+    }
+
+    return () => {
+      if (authListener) authListener.subscription.unsubscribe();
+    };
   }, [currentPage]);
 
   // Apply Theme
@@ -360,6 +364,10 @@ function App() {
   };
 
   const handleAdminLogin = async () => {
+    if (!supabase) {
+      alert("Database connection failed. Cannot login.");
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       setCurrentPage('admin_dashboard');
@@ -367,7 +375,9 @@ function App() {
   };
 
   const handleAdminLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     setCurrentPage('home');
     window.history.pushState({}, '', '/');
   };
