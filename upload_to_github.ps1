@@ -57,8 +57,8 @@ if (-not $CurrentRemote) {
     Write-Host "Remote 'origin' set to $RepoUrl" -ForegroundColor Green
 }
 
-Write-Host "Pushing to GitHub..." -ForegroundColor Cyan
-git push -u origin main
+Write-Host "Pushing to GitHub (FORCE OVERWRITE)..." -ForegroundColor Cyan
+git push -u origin main --force
 
-Write-Host "Upload complete!" -ForegroundColor Green
+Write-Host "Upload complete! Remote repository now matches local folder." -ForegroundColor Green
 Read-Host "Press Enter to exit..."
