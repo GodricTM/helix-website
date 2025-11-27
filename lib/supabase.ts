@@ -13,6 +13,7 @@ if (supabaseUrl && supabaseAnonKey) {
     }
 
     try {
+        console.log('Initializing Supabase with URL:', validUrl);
         client = createClient(validUrl, supabaseAnonKey);
     } catch (e) {
         console.error('Failed to initialize Supabase client:', e);
