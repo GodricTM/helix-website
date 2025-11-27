@@ -52,10 +52,16 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       console.log('App: Fetching data...');
-      console.log('App: Supabase client exists?', !!supabase);
+
+      // Safety Timeout: Force loading to false after 5 seconds if DB hangs
+      const safetyTimer = setTimeout(() => {
+        console.warn('App: Data fetch timed out. Falling back to local data.');
+        setLoading(false);
+      }, 5000);
 
       if (!supabase) {
         console.warn('Supabase client not initialized. Using local constants.');
+        clearTimeout(safetyTimer);
         setLoading(false);
         return;
       }
@@ -157,6 +163,7 @@ function App() {
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
+        clearTimeout(safetyTimer);
         setLoading(false);
       }
     };
