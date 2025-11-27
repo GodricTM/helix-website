@@ -372,6 +372,16 @@ function App() {
     window.history.pushState({}, '', '/');
   };
 
+  // Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-garage-950 flex flex-col items-center justify-center text-white">
+        <div className="w-16 h-16 border-4 border-garage-800 border-t-bronze-500 rounded-full animate-spin mb-4"></div>
+        <p className="font-mono text-garage-400 animate-pulse">INITIALIZING HELIX SYSTEM...</p>
+      </div>
+    );
+  }
+
   // Render Admin Pages
   if (currentPage === 'admin_login') {
     return <AdminLogin onLogin={handleAdminLogin} />;
