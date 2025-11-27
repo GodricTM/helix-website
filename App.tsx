@@ -51,6 +51,9 @@ function App() {
   // Fetch Initial Data from Supabase
   useEffect(() => {
     const fetchData = async () => {
+      console.log('App: Fetching data...');
+      console.log('App: Supabase client exists?', !!supabase);
+
       if (!supabase) {
         console.warn('Supabase client not initialized. Using local constants.');
         setLoading(false);
