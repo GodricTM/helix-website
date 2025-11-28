@@ -2057,7 +2057,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={generalForm.helixVideoUrl || ''}
                       onChange={handleGeneralChange}
                       className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
-                      placeholder="/helix-video.mp4"
+                      placeholder="/videos/helix-video.mp4"
                     />
                     <p className="text-xs text-garage-500 mt-1">Path to the main background video file.</p>
                   </div>

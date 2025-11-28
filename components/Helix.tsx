@@ -21,7 +21,7 @@ const Helix: React.FC<HelixProps> = ({ contactInfo }) => {
           poster="https://images.unsplash.com/photo-1625828552673-863a35c596d6?q=80&w=2000"
         >
           {/* Points to 'helix-video.mp4' in your 'public' folder */}
-          <source src={contactInfo.helixVideoUrl || "/helix-video.mp4?v=3"} type="video/mp4" />
+          <source src={contactInfo.helixVideoUrl || "/videos/helix-video.mp4"} type="video/mp4" />
           <img src="https://images.unsplash.com/photo-1486262715619-01b80250e0dc?auto=format&fit=crop&q=80&w=1600" alt="Motorcycle Garage" className="w-full h-full object-cover" />
         </video>
 

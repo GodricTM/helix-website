@@ -471,9 +471,9 @@ function App() {
                             <Helix contactInfo={contactInfo} />
                             {contactInfo.showExtraVideos !== false && (
                               <>
-                                <VideoSection videoUrl="/helix-video1.mp4?v=1" title="Precision Engineering" subtitle="Every Detail Matters" />
-                                <VideoSection videoUrl="/helix-video2.mp4?v=1" title="Master Craftsmanship" subtitle="Built to Perform" />
-                                <VideoSection videoUrl="/helix-video3.mp4?v=1" title="Unleashed Power" subtitle="Ready for the Road" />
+                                <VideoSection videoUrl="/videos/helix-video1.mp4" title="Precision Engineering" subtitle="Every Detail Matters" />
+                                <VideoSection videoUrl="/videos/helix-video2.mp4" title="Master Craftsmanship" subtitle="Built to Perform" />
+                                <VideoSection videoUrl="/videos/helix-video3.mp4" title="Unleashed Power" subtitle="Ready for the Road" />
                               </>
                             )}
                           </React.Fragment>
