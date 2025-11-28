@@ -45,6 +45,17 @@ const Services: React.FC<ServicesProps> = ({ services, contactInfo, onCerakoteCl
     <section id="services" className="py-24 bg-garage-900 border-y border-garage-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
+        {/* Back Button */}
+        <a
+          href="/"
+          className="mb-8 inline-flex items-center text-bronze-500 hover:text-bronze-400 transition-colors group"
+        >
+          <svg className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Home
+        </a>
+
         {/* Header */}
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-white uppercase tracking-tight mb-4">Workshop Services</h2>
@@ -65,7 +76,7 @@ const Services: React.FC<ServicesProps> = ({ services, contactInfo, onCerakoteCl
               <div className="absolute top-4 left-8 z-20 animate-bounce">
                 <span className="text-bronze-500 font-bold font-mono text-sm bg-garage-900/80 px-2 py-1 rounded border border-bronze-500/50">Check it out !</span>
               </div>
-              <div className="p-8 md:p-12 md:w-1/2 z-10">
+              <div className="px-8 pb-8 pt-16 md:p-12 md:w-1/2 z-10">
                 <div className="flex items-center mb-6">
                   <div className="p-3 bg-bronze-600 rounded-lg text-white mr-4">
                     {icons[service.icon]}

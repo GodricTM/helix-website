@@ -19,13 +19,25 @@ const ProjectsPage: React.FC<ProjectsPageProps> = ({ projects }) => {
     <div className="bg-garage-950 min-h-screen pt-20">
       {/* Page Header */}
       <div className="bg-garage-900 border-b border-garage-800 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-white uppercase tracking-tight mb-4">
-            Project <span className="text-bronze-500">Gallery</span>
-          </h1>
-          <p className="text-garage-400 font-mono max-w-2xl mx-auto">
-            A comprehensive collection of our custom builds, restorations, and specialized finishes.
-          </p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Back Button */}
+          <a
+            href="/"
+            className="mb-8 inline-flex items-center text-bronze-500 hover:text-bronze-400 transition-colors group"
+          >
+            <svg className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Home
+          </a>
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-white uppercase tracking-tight mb-4">
+              Project <span className="text-bronze-500">Gallery</span>
+            </h1>
+            <p className="text-garage-400 font-mono max-w-2xl mx-auto">
+              A comprehensive collection of our custom builds, restorations, and specialized finishes.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -30,7 +30,7 @@ const Helix: React.FC<HelixProps> = ({ contactInfo }) => {
         <div className="absolute inset-0 bg-black/60" />
       </div>
 
-      <div className="relative z-10 text-center px-4 max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between">
+      <div className="relative z-10 text-center px-4 max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pt-24 md:pt-0">
 
         {/* Main Text Content */}
         <div className="max-w-4xl text-left">
