@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
+import SEO from './SEO';
+
 interface AdminLoginProps {
   onLogin: () => void;
 }
@@ -37,6 +39,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-garage-950 flex items-center justify-center px-4">
+      <SEO title="Admin Login" description="Login to Helix Motorcycles admin panel." />
       <div className="max-w-md w-full bg-garage-900 border border-garage-800 p-8 rounded-sm shadow-2xl">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold font-helix italic text-white uppercase tracking-wider">Admin Access</h2>

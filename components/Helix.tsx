@@ -21,7 +21,7 @@ const Helix: React.FC<HelixProps> = ({ contactInfo }) => {
           poster="https://images.unsplash.com/photo-1625828552673-863a35c596d6?q=80&w=2000"
         >
           {/* Points to 'helix-video.mp4' in your 'public' folder */}
-          <source src={contactInfo.helixVideoUrl || "/helix-video.mp4"} type="video/mp4" />
+          <source src={contactInfo.helixVideoUrl || "/helix-video.MP4?v=3"} type="video/mp4" />
           <img src="https://images.unsplash.com/photo-1486262715619-01b80250e0dc?auto=format&fit=crop&q=80&w=1600" alt="Motorcycle Garage" className="w-full h-full object-cover" />
         </video>
 
@@ -34,14 +34,23 @@ const Helix: React.FC<HelixProps> = ({ contactInfo }) => {
 
         {/* Main Text Content */}
         <div className="max-w-4xl text-left">
-          <div className="inline-flex items-center bg-bronze-900/30 border border-bronze-500/50 rounded-full px-4 py-1 mb-8 backdrop-blur-sm animate-pulse">
+          <div className="inline-flex items-center bg-bronze-900/30 border border-bronze-500/50 rounded-full px-4 py-1 mb-8 backdrop-blur-sm animate-pulse shadow-[0_0_15px_rgba(205,127,50,0.5)]">
             <span className="w-2 h-2 bg-bronze-500 rounded-full mr-2"></span>
             <span className="text-bronze-100 text-xs font-mono tracking-widest uppercase">{contactInfo.helixTagline || 'FREE CONSULTATION AVAILABLE'}</span>
           </div>
 
           <div className="border-l-4 border-bronze-500 pl-6 text-left mb-8">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-helix italic text-white uppercase tracking-tight mb-2 leading-tight">
-              {contactInfo.helixTitle || 'Motorcycles are in our'} <span className={`text-transparent bg-clip-text bg-gradient-to-r from-bronze-500 to-amber-200 inline-block ${contactInfo.helixTitleEffect ? `effect-${contactInfo.helixTitleEffect}` : 'animate-float'}`}>{contactInfo.helixTitleHighlight || 'DNA'}</span>
+              {contactInfo.helixTitle || 'Motorcycles are in our'} <span
+                onClick={() => {
+                  const audio = new Audio('/motorcycle-rev.mp3');
+                  audio.volume = 0.5;
+                  audio.play().catch(e => console.error("Audio play failed", e));
+                }}
+                className={`text-transparent bg-clip-text bg-gradient-to-r from-bronze-500 to-amber-200 inline-block cursor-pointer hover:scale-110 transition-transform duration-200 ${contactInfo.helixTitleEffect ? `effect-${contactInfo.helixTitleEffect}` : 'animate-float'}`}
+              >
+                {contactInfo.helixTitleHighlight || 'DNA'}
+              </span>
             </h1>
             <p className="text-xl md:text-2xl text-garage-300 font-helix italic font-medium tracking-wide mb-6">
               {contactInfo.helixDescription || '— building, tuning, and fixing them right.'}

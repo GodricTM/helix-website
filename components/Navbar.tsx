@@ -1,27 +1,37 @@
-
 import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ContactInfo } from '../types';
 import Logo from './Logo';
 
 interface NavbarProps {
-  currentPage: 'home' | 'projects';
-  onNavigate: (page: 'home' | 'projects') => void;
+  currentPage: string;
+  onNavigate: (page: string) => void; // Kept for compatibility but unused internally
   contactInfo?: ContactInfo;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, contactInfo }) => {
+const Navbar: React.FC<NavbarProps> = ({ currentPage, contactInfo }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleNavClick = (page: 'home' | 'projects', hash?: string) => {
-    onNavigate(page);
+  const handleNavClick = (path: string, hash?: string) => {
     setIsOpen(false);
-    if (page === 'home' && hash) {
-      setTimeout(() => {
+
+    if (path === '/' && hash) {
+      if (location.pathname !== '/') {
+        navigate('/');
+        // Wait for navigation to complete before scrolling
+        setTimeout(() => {
+          const element = document.querySelector(hash);
+          element?.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      } else {
         const element = document.querySelector(hash);
         element?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      }
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo(0, 0);
+      navigate(path);
     }
   };
 
@@ -29,7 +39,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, contactInfo })
     <nav className="sticky top-0 z-50 bg-garage-950/90 backdrop-blur-md border-b border-garage-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <div className="flex items-center group cursor-pointer" onClick={() => handleNavClick('home', '#helix')}>
+          <div className="flex items-center group cursor-pointer" onClick={() => handleNavClick('/')}>
             <div className="relative flex-shrink-0 text-bronze-500 mr-3">
               <Logo
                 className="h-14 w-14 text-garage-400 group-hover:text-bronze-500 transition-colors duration-500"
@@ -39,7 +49,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, contactInfo })
             <div className="hidden md:block">
               <div className="flex flex-col">
                 <span className="text-2xl font-bold tracking-wider text-white leading-none">HELIX</span>
-                <span className="text-[10px] font-light tracking-[0.3em] text-garage-400 leading-none mt-1">MOTORCYCLES</span>
+                <span className="text-xs font-light tracking-[0.3em] text-garage-400 leading-none mt-1">MOTORCYCLES</span>
               </div>
             </div>
           </div>
@@ -47,23 +57,29 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, contactInfo })
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-8">
               <button
-                onClick={() => handleNavClick('home', '#helix')}
-                className={`${currentPage === 'home' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
+                onClick={() => handleNavClick('/')}
+                className={`${location.pathname === '/' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
               >
                 HOME
               </button>
-              <button
-                onClick={() => handleNavClick('home', '#services')}
-                className="text-garage-300 hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              <Link
+                to="/services"
+                className={`${location.pathname === '/services' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
               >
                 SERVICES
-              </button>
-              <button
-                onClick={() => handleNavClick('projects')}
-                className={`${currentPage === 'projects' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
+              </Link>
+              <Link
+                to="/projects"
+                className={`${location.pathname === '/projects' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
               >
                 PROJECTS
-              </button>
+              </Link>
+              <Link
+                to="/cerakote"
+                className={`${location.pathname === '/cerakote' ? 'text-white' : 'text-garage-300'} hover:text-bronze-500 px-3 py-2 rounded-md text-sm font-medium transition-colors`}
+              >
+                CERAKOTE
+              </Link>
               <a
                 href="https://wa.link/b4y8g6"
                 target="_blank"
@@ -98,10 +114,11 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, contactInfo })
       {isOpen && (
         <div className="md:hidden bg-garage-900 border-b border-garage-800">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <button onClick={() => handleNavClick('home', '#helix')} className="text-white block px-3 py-2 rounded-md text-base font-medium w-full text-left">HOME</button>
-            <button onClick={() => handleNavClick('home', '#services')} className="text-garage-300 block px-3 py-2 rounded-md text-base font-medium w-full text-left">SERVICES</button>
-            <button onClick={() => handleNavClick('projects')} className="text-garage-300 block px-3 py-2 rounded-md text-base font-medium w-full text-left">PROJECTS</button>
-            <button onClick={() => handleNavClick('home', '#contact')} className="text-bronze-500 block px-3 py-2 rounded-md text-base font-medium w-full text-left">CONTACT</button>
+            <button onClick={() => handleNavClick('/', '#helix')} className="text-white block px-3 py-2 rounded-md text-base font-medium w-full text-left">HOME</button>
+            <Link to="/services" onClick={() => setIsOpen(false)} className="text-garage-300 block px-3 py-2 rounded-md text-base font-medium w-full text-left">SERVICES</Link>
+            <Link to="/projects" onClick={() => setIsOpen(false)} className="text-garage-300 block px-3 py-2 rounded-md text-base font-medium w-full text-left">PROJECTS</Link>
+            <Link to="/cerakote" onClick={() => setIsOpen(false)} className="text-garage-300 block px-3 py-2 rounded-md text-base font-medium w-full text-left">CERAKOTE</Link>
+            <button onClick={() => handleNavClick('/', '#contact')} className="text-bronze-500 block px-3 py-2 rounded-md text-base font-medium w-full text-left">CONTACT</button>
           </div>
         </div>
       )}

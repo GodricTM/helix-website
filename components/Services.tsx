@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { SPECIALTY_SERVICES } from '../constants';
 import { ServiceItem, ContactInfo } from '../types';
 import BeforeAfterSlider from './BeforeAfterSlider';
+import SoundGallery from './SoundGallery';
 
 interface ServicesProps {
   services: ServiceItem[];
   contactInfo?: ContactInfo;
+  onCerakoteClick?: () => void;
 }
 
 const icons: Record<string, React.ReactNode> = {
@@ -23,8 +25,21 @@ const icons: Record<string, React.ReactNode> = {
   'CircleDot': <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="1" /></svg>,
 };
 
-const Services: React.FC<ServicesProps> = ({ services, contactInfo }) => {
+const Services: React.FC<ServicesProps> = ({ services, contactInfo, onCerakoteClick }) => {
   const [flippedId, setFlippedId] = useState<string | null>(null);
+
+  const handleCerakoteClick = () => {
+    const audio = new Audio('/spray.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(e => console.error("Audio play failed", e));
+
+    // Navigate after a short delay or immediately
+    if (onCerakoteClick) {
+      setTimeout(() => {
+        onCerakoteClick();
+      }, 800); // Wait for sound to start
+    }
+  };
 
   return (
     <section id="services" className="py-24 bg-garage-900 border-y border-garage-800">
@@ -42,8 +57,15 @@ const Services: React.FC<ServicesProps> = ({ services, contactInfo }) => {
         {/* Featured Service: Cerakote */}
         <div className="mb-16">
           {SPECIALTY_SERVICES.map(service => (
-            <div key={service.id} className="relative bg-garage-950 border border-bronze-500/30 overflow-hidden rounded-sm flex flex-col md:flex-row shadow-[0_0_30px_rgba(205,127,50,0.05)]">
-              <div className="p-8 md:p-12 md:w-3/5 z-10">
+            <div
+              key={service.id}
+              onClick={handleCerakoteClick}
+              className="relative bg-garage-950 border border-bronze-500/30 overflow-hidden rounded-sm flex flex-col md:flex-row shadow-[0_0_30px_rgba(205,127,50,0.05)] cursor-pointer hover:border-bronze-500 transition-colors group"
+            >
+              <div className="absolute top-4 left-8 z-20 animate-bounce">
+                <span className="text-bronze-500 font-bold font-mono text-sm bg-garage-900/80 px-2 py-1 rounded border border-bronze-500/50">Check it out !</span>
+              </div>
+              <div className="p-8 md:p-12 md:w-1/2 z-10">
                 <div className="flex items-center mb-6">
                   <div className="p-3 bg-bronze-600 rounded-lg text-white mr-4">
                     {icons[service.icon]}
@@ -60,13 +82,13 @@ const Services: React.FC<ServicesProps> = ({ services, contactInfo }) => {
                   <span className="flex items-center"><span className="w-1.5 h-1.5 bg-bronze-500 rounded-full mr-2"></span>Custom Finishes</span>
                 </div>
               </div>
-              <div className="absolute right-0 top-0 bottom-0 w-full md:w-1/2">
+              <div className="relative h-64 md:absolute md:h-auto md:right-0 md:top-0 md:bottom-0 w-full md:w-1/2">
                 <BeforeAfterSlider
                   beforeImage={contactInfo?.cerakoteBeforeUrl || "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=800"}
                   afterImage={contactInfo?.cerakoteAfterUrl || "https://images.nicindustries.com/cerakote/projects/92676/harley-davidson-rims-in-gold-high-gloss-clear-coat-thumbnail.jpg?1690947983&size=450"}
                   alt="Cerakote Transformation"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-garage-950/90 via-garage-950/20 to-transparent pointer-events-none"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-garage-950/90 via-garage-950/20 to-transparent pointer-events-none hidden md:block"></div>
               </div>
             </div>
           ))}
@@ -125,8 +147,14 @@ const Services: React.FC<ServicesProps> = ({ services, contactInfo }) => {
             </div>
           ))}
         </div>
-
       </div>
+
+      {/* Sound Check Gallery */}
+      {contactInfo?.showSoundGallery !== false && (
+        <div className="mt-24">
+          <SoundGallery />
+        </div>
+      )}
     </section>
   );
 };

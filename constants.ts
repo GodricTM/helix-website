@@ -15,7 +15,8 @@ export const CONTACT_INFO = {
     friday: "09:00 - 22:00",
     weekends: "By Appt."
   },
-  sectionOrder: ['helix', 'services', 'showroom', 'location', 'ai_garage']
+  sectionOrder: ['helix', 'services', 'showroom', 'location', 'ai_garage'],
+  showExtraVideos: true
 };
 
 export const PROJECTS: Project[] = [

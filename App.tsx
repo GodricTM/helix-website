@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Helix from './components/Helix';
 import Showroom from './components/Showroom';
@@ -6,54 +7,43 @@ import Services from './components/Services';
 import AIGarage from './components/AIGarage';
 import LocationMap from './components/LocationMap';
 import Footer from './components/Footer';
-import ProjectsPage from './components/ProjectsPage';
-import AdminLogin from './components/AdminLogin';
-import AdminDashboard from './components/AdminDashboard';
 import RiderReviews from './components/RiderReviews';
 import PromotionBanner from './components/PromotionBanner';
+import SEO from './components/SEO';
+import VideoSection from './components/VideoSection';
 import {
   PROJECTS as INITIAL_PROJECTS,
   CONTACT_INFO as INITIAL_CONTACT_INFO,
   STANDARD_SERVICES as INITIAL_SERVICES
 } from './constants';
-import { Project, ContactInfo, ServiceItem, Review } from './types';
+import { Project, ServiceCategory, ContactInfo, ServiceItem, Review, CerakoteProduct, CerakoteFinish } from './types';
 import { supabase } from './lib/supabase';
 
+// Lazy Load Pages
+const ProjectsPage = lazy(() => import('./components/ProjectsPage'));
+const AdminLogin = lazy(() => import('./components/AdminLogin'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const CerakotePage = lazy(() => import('./components/CerakotePage'));
+
 function App() {
-  const [currentPage, setCurrentPage] = useState<'home' | 'projects' | 'admin_login' | 'admin_dashboard'>(() => {
-    const path = window.location.pathname;
-    if (path === '/admin') return 'admin_login';
-    return 'home';
-  });
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Supabase State
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [contactInfo, setContactInfo] = useState<ContactInfo>(INITIAL_CONTACT_INFO);
   const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [cerakoteProducts, setCerakoteProducts] = useState<CerakoteProduct[]>([]);
+  const [cerakoteFinishes, setCerakoteFinishes] = useState<CerakoteFinish[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Handle browser back/forward buttons
-  useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path === '/admin') {
-        setCurrentPage(prev => prev === 'admin_dashboard' ? 'admin_dashboard' : 'admin_login');
-      } else {
-        setCurrentPage('home');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  const [session, setSession] = useState<any>(null);
 
   // Fetch Initial Data from Supabase
   useEffect(() => {
     const fetchData = async () => {
       console.log('App: Fetching data...');
 
-      // Safety Timeout: Force loading to false after 5 seconds if DB hangs
       const safetyTimer = setTimeout(() => {
         console.warn('App: Data fetch timed out. Falling back to local data.');
         setLoading(false);
@@ -76,11 +66,10 @@ function App() {
           .order('created_at', { ascending: false });
 
         if (projectsData && !projectsError) {
-          // Map snake_case DB fields to camelCase frontend types
           const mappedProjects: Project[] = projectsData.map(p => ({
             id: p.id,
             name: p.name,
-            category: p.category as any, // Cast to enum
+            category: p.category as any,
             serviceDetails: p.service_details,
             image: p.image,
             description: p.description,
@@ -121,7 +110,6 @@ function App() {
             address: contactData.address,
             hours: contactData.hours,
             offer: contactData.offer,
-            // New Editable Content
             helixTitle: contactData.helix_title,
             helixTitleHighlight: contactData.helix_title_highlight,
             helixTitleEffect: contactData.helix_title_effect,
@@ -144,7 +132,10 @@ function App() {
             theme: contactData.theme || 'midnight',
             layoutStyle: contactData.layout_style || 'default',
             promotionEnabled: contactData.promotion_enabled ?? false,
-            promotionText: contactData.promotion_text
+            promotionText: contactData.promotion_text,
+            cerakote_stock: contactData.cerakote_stock,
+            showExtraVideos: contactData.show_extra_videos,
+            showSoundGallery: contactData.show_sound_gallery
           });
         }
 
@@ -160,6 +151,26 @@ function App() {
           setReviews(reviewsData);
         }
 
+        // Fetch Cerakote Products
+        const { data: productsData, error: productsError } = await supabase
+          .from('cerakote_products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (productsData && !productsError) {
+          setCerakoteProducts(productsData);
+        }
+
+        // Fetch Cerakote Finishes
+        const { data: finishesData, error: finishesError } = await supabase
+          .from('cerakote_finishes')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (finishesData && !finishesError) {
+          setCerakoteFinishes(finishesData);
+        }
+
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -171,26 +182,18 @@ function App() {
     fetchData();
 
     // Auth Listener
-    let authListener: { subscription: { unsubscribe: () => void } } | null = null;
-
     if (supabase) {
-      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) {
-          // User is signed in
-        } else {
-          // User is signed out
-          if (currentPage === 'admin_dashboard') {
-            setCurrentPage('admin_login');
-          }
-        }
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
       });
-      authListener = data;
-    }
 
-    return () => {
-      if (authListener) authListener.subscription.unsubscribe();
-    };
-  }, [currentPage]);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+      });
+
+      return () => subscription.unsubscribe();
+    }
+  }, []);
 
   // Apply Theme
   useEffect(() => {
@@ -233,13 +236,13 @@ function App() {
         '--color-garage-700': '#374151',
         '--color-garage-800': '#1f2937',
         '--color-garage-900': '#111827',
-        '--color-garage-950': '#030712', // Deep Black
+        '--color-garage-950': '#030712',
         '--color-bronze-50': '#f8fafc',
         '--color-bronze-100': '#f1f5f9',
         '--color-bronze-200': '#e2e8f0',
         '--color-bronze-300': '#cbd5e1',
         '--color-bronze-400': '#94a3b8',
-        '--color-bronze-500': '#64748b', // Slate Blue/Grey
+        '--color-bronze-500': '#64748b',
         '--color-bronze-600': '#475569',
         '--color-bronze-700': '#334155',
         '--color-bronze-800': '#1e293b',
@@ -257,13 +260,13 @@ function App() {
         '--color-garage-700': '#8b6542',
         '--color-garage-800': '#73533b',
         '--color-garage-900': '#5e4435',
-        '--color-garage-950': '#3b2a22', // Warm Brown
+        '--color-garage-950': '#3b2a22',
         '--color-bronze-50': '#fffbeb',
         '--color-bronze-100': '#fef3c7',
         '--color-bronze-200': '#fde68a',
         '--color-bronze-300': '#fcd34d',
         '--color-bronze-400': '#fbbf24',
-        '--color-bronze-500': '#f59e0b', // Gold
+        '--color-bronze-500': '#f59e0b',
         '--color-bronze-600': '#d97706',
         '--color-bronze-700': '#b45309',
         '--color-bronze-800': '#92400e',
@@ -281,13 +284,13 @@ function App() {
         '--color-garage-700': '#be185d',
         '--color-garage-800': '#9d174d',
         '--color-garage-900': '#831843',
-        '--color-garage-950': '#050505', // Black
+        '--color-garage-950': '#050505',
         '--color-bronze-50': '#ecfeff',
         '--color-bronze-100': '#cffafe',
         '--color-bronze-200': '#a5f3fc',
         '--color-bronze-300': '#67e8f9',
         '--color-bronze-400': '#22d3ee',
-        '--color-bronze-500': '#06b6d4', // Cyan
+        '--color-bronze-500': '#06b6d4',
         '--color-bronze-600': '#0891b2',
         '--color-bronze-700': '#0e7490',
         '--color-bronze-800': '#155e75',
@@ -305,13 +308,13 @@ function App() {
         '--color-garage-700': '#23754b',
         '--color-garage-800': '#1f5d3e',
         '--color-garage-900': '#1a4c35',
-        '--color-garage-950': '#052e16', // Deep Green
+        '--color-garage-950': '#052e16',
         '--color-bronze-50': '#fefce8',
         '--color-bronze-100': '#fef9c3',
         '--color-bronze-200': '#fef08a',
         '--color-bronze-300': '#fde047',
         '--color-bronze-400': '#facc15',
-        '--color-bronze-500': '#eab308', // Yellow/Gold
+        '--color-bronze-500': '#eab308',
         '--color-bronze-600': '#ca8a04',
         '--color-bronze-700': '#a16207',
         '--color-bronze-800': '#854d0e',
@@ -329,13 +332,13 @@ function App() {
         '--color-garage-700': '#0369a1',
         '--color-garage-800': '#075985',
         '--color-garage-900': '#0c4a6e',
-        '--color-garage-950': '#020410', // Deep Blue Black
+        '--color-garage-950': '#020410',
         '--color-bronze-50': '#f5f3ff',
         '--color-bronze-100': '#ede9fe',
         '--color-bronze-200': '#ddd6fe',
         '--color-bronze-300': '#c4b5fd',
         '--color-bronze-400': '#a78bfa',
-        '--color-bronze-500': '#8b5cf6', // Violet
+        '--color-bronze-500': '#8b5cf6',
         '--color-bronze-600': '#7c3aed',
         '--color-bronze-700': '#6d28d9',
         '--color-bronze-800': '#5b21b6',
@@ -353,7 +356,7 @@ function App() {
   }, [contactInfo.theme]);
 
   // 1. Immediate scroll to top on mount (before content loads)
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     window.scrollTo(0, 0);
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual';
@@ -363,73 +366,45 @@ function App() {
   // 2. Ensure it stays at top after loading finishes (handling layout shifts)
   useEffect(() => {
     if (!loading) {
+      // Force instant scroll to top
       window.scrollTo(0, 0);
-      // Double-check after a brief delay to catch any late rendering
-      setTimeout(() => window.scrollTo(0, 0), 50);
+
+      // Repeatedly force top during initial render/paint phase
+      const timers = [
+        setTimeout(() => window.scrollTo(0, 0), 10),
+        setTimeout(() => window.scrollTo(0, 0), 50),
+        setTimeout(() => window.scrollTo(0, 0), 100),
+        setTimeout(() => window.scrollTo(0, 0), 300),
+        setTimeout(() => window.scrollTo(0, 0), 500),
+      ];
+
+      return () => {
+        timers.forEach(timer => clearTimeout(timer));
+      };
     }
   }, [loading]);
 
-  const navigateTo = (page: 'home' | 'projects' | 'admin_login') => {
-    setCurrentPage(page);
-    if (page === 'admin_login') {
-      window.history.pushState({}, '', '/admin');
-    } else {
-      window.history.pushState({}, '', '/');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  // 3. Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const timer = setTimeout(() => window.scrollTo(0, 0), 0);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
-  const handleAdminLogin = async () => {
-    if (!supabase) {
-      alert("Database connection failed. Cannot login.");
-      return;
-    }
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      setCurrentPage('admin_dashboard');
-    }
-  };
+  const LoadingSpinner = () => (
+    <div className="min-h-screen bg-garage-950 flex flex-col items-center justify-center text-white">
+      <div className="w-16 h-16 border-4 border-garage-800 border-t-bronze-500 rounded-full animate-spin mb-4"></div>
+      <p className="font-mono text-garage-400 animate-pulse">LOADING HELIX SYSTEM...</p>
+    </div>
+  );
 
-  const handleAdminLogout = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    setCurrentPage('home');
-    window.history.pushState({}, '', '/');
-  };
-
-  // Loading State
   if (loading) {
-    return (
-      <div className="min-h-screen bg-garage-950 flex flex-col items-center justify-center text-white">
-        <div className="w-16 h-16 border-4 border-garage-800 border-t-bronze-500 rounded-full animate-spin mb-4"></div>
-        <p className="font-mono text-garage-400 animate-pulse">INITIALIZING HELIX SYSTEM...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
-  // Render Admin Pages
-  if (currentPage === 'admin_login') {
-    return <AdminLogin onLogin={handleAdminLogin} />;
-  }
-
-  if (currentPage === 'admin_dashboard') {
-    return (
-      <AdminDashboard
-        projects={projects}
-        onUpdateProjects={setProjects}
-        contactInfo={contactInfo}
-        onUpdateContact={setContactInfo}
-        services={services}
-        onUpdateServices={setServices}
-        onLogout={handleAdminLogout}
-      />
-    );
-  }
-
-  // Render Main Website
   return (
     <div className={`min-h-screen bg-garage-950 text-white font-sans selection:bg-bronze-500 selection:text-white ${contactInfo.layoutStyle === 'minimal' ? 'layout-minimal' : ''}`}>
+
 
       {/* Promotion Banner */}
       {contactInfo.promotionEnabled && contactInfo.promotionText && (
@@ -437,8 +412,12 @@ function App() {
       )}
 
       <Navbar
-        currentPage={currentPage}
-        onNavigate={navigateTo}
+        currentPage={location.pathname === '/' ? 'home' : location.pathname.substring(1)}
+        onNavigate={(page) => {
+          if (page === 'home') navigate('/');
+          else if (page === 'admin_login') navigate('/admin');
+          else navigate(`/${page}`);
+        }}
         contactInfo={contactInfo}
       />
 
@@ -468,38 +447,91 @@ function App() {
       </div>
 
       <main>
-        {currentPage === 'home' ? (
-          <>
-            {/* Dynamic Section Rendering */}
-            {/* Dynamic Section Rendering */}
-            {(() => {
-              const defaultOrder = ['helix', 'services', 'showroom', 'location', 'reviews', 'ai_garage'];
-              const currentOrder = contactInfo.sectionOrder || defaultOrder;
-              // Ensure all known sections are present (append missing ones)
-              const finalOrder = [...new Set([...currentOrder, ...defaultOrder])];
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/" element={
+              <>
+                <SEO
+                  key="home-seo"
+                  title="Helix Motorcycles"
+                  description={contactInfo.helixDescription || "Custom motorcycles, Cerakote finishes, and AI-driven design."}
+                />
+                {(() => {
+                  const defaultOrder = ['helix', 'services', 'showroom', 'location', 'reviews', 'ai_garage'];
+                  const currentOrder = contactInfo.sectionOrder || defaultOrder;
+                  const finalOrder = [...new Set([...currentOrder, ...defaultOrder])];
 
-              return finalOrder.map(section => {
-                switch (section) {
-                  case 'helix': return <Helix key="helix" contactInfo={contactInfo} />;
-                  case 'services': return <Services key="services" services={services} contactInfo={contactInfo} />;
-                  case 'showroom': return <Showroom key="showroom" projects={projects} onViewAll={() => navigateTo('projects')} />;
-                  case 'location':
-                    return <LocationMap key={section} />;
-                  case 'reviews':
-                    return contactInfo.showReviews !== false ? <RiderReviews key={section} reviews={reviews} /> : null;
-                  case 'ai_garage':
-                    return <AIGarage key={section} contactInfo={contactInfo} />;
-                  default:
-                    return null;
-                }
-              });
-            })()}
-          </>
-        ) : (
-          <ProjectsPage projects={projects} />
-        )}
+
+
+                  return finalOrder.map(section => {
+                    switch (section) {
+                      case 'helix':
+                        return (
+                          <React.Fragment key="helix-group">
+                            <Helix contactInfo={contactInfo} />
+                            {contactInfo.showExtraVideos !== false && (
+                              <>
+                                <VideoSection videoUrl="/helix-video1.mp4" title="Precision Engineering" subtitle="Every Detail Matters" />
+                                <VideoSection videoUrl="/helix-video2.MP4" title="Master Craftsmanship" subtitle="Built to Perform" />
+                                <VideoSection videoUrl="/helix-video3.MP4" title="Unleashed Power" subtitle="Ready for the Road" />
+                              </>
+                            )}
+                          </React.Fragment>
+                        );
+                      case 'services': return <Services key="services" services={services} contactInfo={contactInfo} onCerakoteClick={() => navigate('/cerakote')} />;
+                      case 'showroom': return <Showroom key="showroom" projects={projects} onViewAll={() => navigate('/projects')} />;
+                      case 'location': return <LocationMap key={section} />;
+                      case 'reviews': return contactInfo.showReviews !== false ? <RiderReviews key={section} reviews={reviews} /> : null;
+                      case 'ai_garage': return <AIGarage key={section} contactInfo={contactInfo} />;
+                      default: return null;
+                    }
+                  });
+                })()}
+              </>
+            } />
+            <Route path="/projects" element={
+              <>
+                <SEO key="projects-seo" title="Projects" description="Our custom motorcycle builds and restorations." />
+                <ProjectsPage projects={projects} />
+              </>
+            } />
+            <Route path="/cerakote" element={
+              <>
+                <SEO key="cerakote-seo" title="Cerakote" description="Professional Cerakote application and custom finishes." />
+                <CerakotePage onBack={() => navigate('/')} contactInfo={contactInfo} products={cerakoteProducts} finishes={cerakoteFinishes} />
+              </>
+            } />
+            <Route path="/services" element={
+              <>
+                <SEO key="services-seo" title="Services" description="Expert motorcycle maintenance, repairs, and custom Cerakote finishes." />
+                <Services services={services} contactInfo={contactInfo} onCerakoteClick={() => navigate('/cerakote')} />
+              </>
+            } />
+            <Route path="/admin" element={
+              session ? (
+                <AdminDashboard
+                  projects={projects}
+                  onUpdateProjects={setProjects}
+                  contactInfo={contactInfo}
+                  onUpdateContact={setContactInfo}
+                  services={services}
+                  onUpdateServices={setServices}
+                  onLogout={async () => { await supabase?.auth.signOut(); }}
+                />
+              ) : (
+                <AdminLogin onLogin={() => { }} />
+              )
+            } />
+            {/* Fallback for 404 */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
-      <Footer contactInfo={contactInfo} onAdminClick={() => navigateTo('admin_login')} />
+
+      <Footer contactInfo={contactInfo} onAdminClick={() => {
+        window.scrollTo(0, 0);
+        navigate('/admin');
+      }} />
     </div >
   );
 }

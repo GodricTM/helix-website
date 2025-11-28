@@ -16,6 +16,23 @@ export interface Project {
   completedDate: string;
 }
 
+export interface CerakoteProduct {
+  id: string;
+  name: string;
+  description?: string;
+  image_url?: string;
+  price?: string;
+  created_at?: string;
+}
+
+export interface CerakoteFinish {
+  id: string;
+  name: string;
+  code: string;
+  image_url: string;
+  created_at?: string;
+}
+
 export interface ServiceItem {
   id: string;
   title: string;
@@ -63,6 +80,9 @@ export interface ContactInfo {
   layoutStyle?: 'default' | 'minimal';
   promotionEnabled?: boolean;
   promotionText?: string;
+  cerakote_stock?: Record<string, boolean>; // Key is color code, value is boolean (true = in stock)
+  showExtraVideos?: boolean;
+  showSoundGallery?: boolean;
 }
 
 export interface OpeningHoursSpec {
@@ -90,4 +110,22 @@ export interface Message {
   message: string;
   status: 'unread' | 'read';
   is_archived?: boolean;
+}
+
+export interface UserPermissions {
+  manage_team: boolean;
+  manage_content: boolean;
+  manage_projects: boolean;
+  manage_services: boolean;
+  manage_reviews: boolean;
+  view_messages: boolean;
+  manage_messages: boolean;
+}
+
+export interface UserRole {
+  user_id: string;
+  email: string;
+  role: 'super_admin' | 'admin' | 'editor';
+  permissions: UserPermissions;
+  created_at: string;
 }

@@ -1,7 +1,9 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Project, ServiceCategory, ContactInfo, ServiceItem, Message, Review } from '../types';
+import { Project, ServiceCategory, ContactInfo, ServiceItem, Message, Review, UserRole, CerakoteProduct, CerakoteFinish } from '../types';
+import { CERAKOTE_COLORS } from '../cerakoteData';
+import TeamManagement from './TeamManagement';
+import SEO from './SEO';
 
 interface AdminDashboardProps {
   projects: Project[];
@@ -19,11 +21,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   services, onUpdateServices,
   onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'services' | 'reviews' | 'projects' | 'themes' | 'messages'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'services' | 'reviews' | 'projects' | 'themes' | 'messages' | 'team' | 'cerakote'>('general');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // RBAC State
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
+  const [debugAuthId, setDebugAuthId] = useState<string>('');
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -48,8 +56,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewForm, setReviewForm] = useState<Partial<Review>>({});
 
+  // Cerakote Products State
+  const [cerakoteProducts, setCerakoteProducts] = useState<CerakoteProduct[]>([]);
+  const [productForm, setProductForm] = useState<Partial<CerakoteProduct>>({});
+
+  // Cerakote Finishes State
+  const [cerakoteFinishes, setCerakoteFinishes] = useState<CerakoteFinish[]>([]);
+  const [finishForm, setFinishForm] = useState<Partial<CerakoteFinish>>({});
+
+  // Fetch Permissions on Mount
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setDebugAuthId(user.id);
+
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error || !data) {
+          console.error('Error fetching permissions:', error);
+          console.log('Current User:', user.id, user.email); // DIAGNOSTIC LOG
+          if (user.email === 'admin@helixmotorcycles.com') {
+            showNotification('Role not found. Please run db_rbac.sql in Supabase!', 'error');
+          }
+        }
+
+        if (data) {
+          setCurrentUserRole(data as UserRole);
+        }
+      } catch (err) {
+        console.error('Permission check failed:', err);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+    fetchPermissions();
+  }, []);
+
   // Update form when contactInfo changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (contactInfo) {
       const defaultOrder = ['helix', 'services', 'showroom', 'location', 'reviews', 'ai_garage'];
       const currentOrder = contactInfo.sectionOrder || defaultOrder;
@@ -63,11 +113,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [contactInfo]);
 
   // Clear editing state and fetch messages when tab changes
-  React.useEffect(() => {
+  useEffect(() => {
     setEditingId(null);
     setSaveSuccess(false);
 
     if (activeTab === 'messages') {
+      if (!currentUserRole?.permissions.view_messages) {
+        setError("You do not have permission to view messages.");
+        return;
+      }
       const fetchMessages = async () => {
         setError(null);
         let query = supabase
@@ -105,8 +159,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (data) setReviews(data as Review[]);
       };
       fetchReviews();
+    } else if (activeTab === 'cerakote') {
+      const fetchProducts = async () => {
+        const { data, error } = await supabase
+          .from('cerakote_products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching products:', error);
+          showNotification('Failed to fetch products', 'error');
+        }
+        if (data) setCerakoteProducts(data as CerakoteProduct[]);
+      };
+      fetchProducts();
+
+      const fetchFinishes = async () => {
+        const { data, error } = await supabase
+          .from('cerakote_finishes')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching finishes:', error);
+        }
+        if (data) setCerakoteFinishes(data as CerakoteFinish[]);
+      };
+      fetchFinishes();
     }
-  }, [activeTab, messageViewMode]);
+  }, [activeTab, messageViewMode, currentUserRole]);
+
+  // --- HANDLERS WITH PERMISSION CHECKS ---
+
+  const checkPermission = (permission: keyof UserRole['permissions']) => {
+    if (!currentUserRole?.permissions[permission]) {
+      showNotification('Access Denied: Insufficient Permissions', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  // ... (Keep existing handlers but wrap in checkPermission)
+  // I will implement the wrappers in the next step to keep this chunk manageable.
+  // For now, I'm setting up the structure and the Render method.
+
+
 
   const toggleMessageSelection = (id: string) => {
     const newSelected = new Set(selectedMessageIds);
@@ -128,6 +225,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleArchiveMessage = async (id: string) => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     // No confirmation dialog
 
     try {
@@ -152,6 +250,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDeleteMessage = async (id: string) => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     // No confirmation dialog
 
     try {
@@ -176,6 +275,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveReview = async () => {
     setError(null);
+    if (!checkPermission('manage_reviews')) return;
     try {
       const reviewData = {
         name: reviewForm.name,
@@ -217,6 +317,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteReview = async (id: string) => {
+    if (!checkPermission('manage_reviews')) return;
     if (!window.confirm('Are you sure you want to delete this review?')) return;
 
     try {
@@ -235,6 +336,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveReviewSettings = async () => {
+    if (!checkPermission('manage_reviews')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -253,6 +355,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleArchiveSelectedMessages = async () => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     if (selectedMessageIds.size === 0) return;
     // No confirmation dialog
 
@@ -274,6 +377,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDeleteSelectedMessages = async () => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     if (selectedMessageIds.size === 0) return;
     // No confirmation dialog
 
@@ -295,6 +399,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleUnarchiveMessage = async (id: string) => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     try {
       const { error } = await supabase
         .from('messages')
@@ -317,6 +422,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleUnarchiveSelectedMessages = async () => {
     setError(null);
+    if (!checkPermission('manage_messages')) return;
     if (selectedMessageIds.size === 0) return;
 
     try {
@@ -383,6 +489,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveProject = async () => {
+    if (!checkPermission('manage_projects')) return;
     if (!projectForm.name) return;
 
     try {
@@ -446,21 +553,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (window.confirm('Delete this project?')) {
-      try {
-        const { error } = await supabase
-          .from('projects')
-          .delete()
-          .eq('id', id);
+    if (!checkPermission('manage_projects')) return;
+    if (!window.confirm('Are you sure you want to delete this project?')) return;
 
-        if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
 
-        onUpdateProjects(projects.filter(p => p.id !== id));
-        showNotification('Project Deleted');
-      } catch (error) {
-        console.error('Error deleting project:', error);
-        showNotification('Failed to delete project', 'error');
-      }
+      if (error) throw error;
+
+      onUpdateProjects(projects.filter(p => p.id !== id));
+      showNotification('Project Deleted');
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      showNotification('Failed to delete project', 'error');
     }
   };
 
@@ -483,6 +591,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveService = async () => {
+    if (!checkPermission('manage_services')) return;
     if (!serviceForm.title) return;
 
     try {
@@ -541,7 +650,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteService = async (id: string) => {
-    if (window.confirm('Delete this service?')) {
+    if (!checkPermission('manage_services')) return;
+    if (!window.confirm('Are you sure you want to delete this service?')) return; {
       try {
         const { error } = await supabase
           .from('services')
@@ -609,6 +719,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveContact = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -631,6 +742,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveHelix = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -649,6 +761,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           theme: generalForm.theme,
           layout_style: generalForm.layoutStyle,
           promotion_enabled: generalForm.promotionEnabled,
+          show_extra_videos: generalForm.showExtraVideos,
+          show_sound_gallery: generalForm.showSoundGallery,
         }).eq('id', existing.id);
         if (error) throw error;
       }
@@ -660,7 +774,139 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // --- CERAKOTE PRODUCT HANDLERS ---
+  const handleSaveProduct = async () => {
+    if (!checkPermission('manage_content')) return;
+    try {
+      const productData = {
+        name: productForm.name,
+        description: productForm.description,
+        image_url: productForm.image_url,
+        price: productForm.price
+      };
+
+      if (productForm.id) {
+        // Update
+        const { error } = await supabase
+          .from('cerakote_products')
+          .update(productData)
+          .eq('id', productForm.id);
+
+        if (error) throw error;
+
+        setCerakoteProducts(prev => prev.map(p => p.id === productForm.id ? { ...p, ...productData } : p));
+      } else {
+        // Insert
+        const { data, error } = await supabase
+          .from('cerakote_products')
+          .insert([productData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        setCerakoteProducts(prev => [data, ...prev]);
+      }
+
+      setEditingId(null);
+      setProductForm({});
+      showNotification('Product Saved');
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      showNotification(`Failed to save product: ${error.message}`, 'error');
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!checkPermission('manage_content')) return;
+    setDeletingId(id);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!deletingId) return;
+    const id = deletingId;
+
+    try {
+      const { error } = await supabase
+        .from('cerakote_products')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setCerakoteProducts(prev => prev.filter(p => p.id !== id));
+      showNotification('Product Deleted');
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      showNotification('Failed to delete product', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // --- CERAKOTE FINISH HANDLERS ---
+  const handleSaveFinish = async () => {
+    if (!checkPermission('manage_content')) return;
+    try {
+      const finishData = {
+        name: finishForm.name,
+        code: finishForm.code,
+        image_url: finishForm.image_url
+      };
+
+      if (finishForm.id) {
+        // Update
+        const { error } = await supabase
+          .from('cerakote_finishes')
+          .update(finishData)
+          .eq('id', finishForm.id);
+
+        if (error) throw error;
+        setCerakoteFinishes(prev => prev.map(f => f.id === finishForm.id ? { ...f, ...finishData } : f));
+      } else {
+        // Insert
+        const { data, error } = await supabase
+          .from('cerakote_finishes')
+          .insert([finishData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        setCerakoteFinishes(prev => [...prev, data]);
+      }
+
+      setEditingId(null);
+      setFinishForm({});
+      showNotification('Finish Saved');
+    } catch (error: any) {
+      console.error('Error saving finish:', error);
+      showNotification(`Failed to save finish: ${error.message}`, 'error');
+    }
+  };
+
+  const handleDeleteFinish = async (id: string) => {
+    if (!checkPermission('manage_content')) return;
+    if (!window.confirm('Delete this finish?')) return; // Using simple confirm for now to save time, or I can reuse the modal logic if I make it generic.
+    // Actually, let's reuse the modal logic. I need to know WHAT I am deleting.
+    // For now, I'll stick to window.confirm for this new feature to avoid overcomplicating the modal state right now, or I can add a 'deletingType' state.
+    // The user asked to fix the POPUP for products. I did that.
+    // For finishes, I'll use the same modal if I can.
+
+    try {
+      const { error } = await supabase
+        .from('cerakote_finishes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setCerakoteFinishes(prev => prev.filter(f => f.id !== id));
+      showNotification('Finish Deleted');
+    } catch (error: any) {
+      console.error('Error deleting finish:', error);
+      showNotification('Failed to delete finish', 'error');
+    }
+  };
+
   const handleSaveThemes = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
 
@@ -683,6 +929,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSavePromotions = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -701,6 +948,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveSocial = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -721,6 +969,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveHours = async () => {
+    if (!checkPermission('manage_content')) return;
     try {
       const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
       if (existing) {
@@ -737,6 +986,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleToggleCerakoteStock = (code: string) => {
+    const currentStock = generalForm.cerakote_stock || {};
+    const newStock = { ...currentStock, [code]: currentStock[code] === false ? true : false };
+    // If true (in stock), we can actually just remove the key to save space, or keep it true.
+    // Let's keep it explicit: false = out of stock, true/undefined = in stock.
+    // Actually, to match the UI logic: if it's false, it's out. If it's true or missing, it's in.
+
+    setGeneralForm(prev => ({ ...prev, cerakote_stock: newStock }));
+  };
+
+  const handleSaveCerakoteStock = async () => {
+    if (!checkPermission('manage_content')) return;
+    try {
+      const { data: existing } = await supabase.from('contact_info').select('id').limit(1).single();
+      if (existing) {
+        const { error } = await supabase.from('contact_info').update({
+          cerakote_stock: generalForm.cerakote_stock
+        }).eq('id', existing.id);
+        if (error) throw error;
+      }
+      onUpdateContact(generalForm);
+      showNotification('Stock Status Saved');
+    } catch (error) {
+      console.error('Error saving stock status:', error);
+      showNotification('Failed to save stock status', 'error');
+    }
+  };
+
   // Helper for inputs
   const handleProjectChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setProjectForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -747,6 +1024,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-garage-950 text-white p-6 pb-24">
+      <SEO title={`Admin | ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`} description="Manage Helix Motorcycles content." />
+
       {/* Notification Toast */}
       {notification && (
         <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-sm border shadow-2xl transform transition-all duration-300 ease-in-out flex items-center gap-3 ${notification.type === 'success'
@@ -759,7 +1038,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       <div className="max-w-6xl mx-auto">
+
+
         {/* Header */}
+        {/* Header Title & Logout */}
         <div className="flex justify-between items-center mb-6 border-b border-garage-800 pb-6">
           <div>
             <h1 className="text-3xl font-bold uppercase tracking-tight">Workshop <span className="text-bronze-500">CMS</span></h1>
@@ -774,25 +1056,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex space-x-2 mb-8 overflow-x-auto">
+        <div className="flex flex-wrap gap-2 mb-8">
           <button
-            onClick={() => setActiveTab('projects')}
-            className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'projects' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
+            onClick={() => setActiveTab('general')}
+            className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'general' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
           >
-            Projects Gallery
+            General
           </button>
           <button
             onClick={() => setActiveTab('services')}
             className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'services' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
           >
-            Services List
+            Services
           </button>
-          <button
-            onClick={() => setActiveTab('general')}
-            className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'general' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
-          >
-            General Settings
-          </button>
+          {currentUserRole?.permissions.manage_projects && (
+            <button
+              onClick={() => setActiveTab('projects')}
+              className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'projects' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
+            >
+              Projects
+            </button>
+          )}
+          {currentUserRole?.permissions.manage_team && (
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'team' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
+            >
+              Team
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('messages')}
             className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'messages' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
@@ -811,7 +1103,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             Themes
           </button>
+          <button
+            onClick={() => setActiveTab('cerakote')}
+            className={`px-6 py-3 font-bold uppercase text-sm tracking-wider rounded-sm transition-colors ${activeTab === 'cerakote' ? 'bg-bronze-600 text-white' : 'bg-garage-900 text-garage-400 hover:bg-garage-800'}`}
+          >
+            Cerakote Stock
+          </button>
         </div>
+
 
         {/* --- PROJECTS TAB --- */}
         {activeTab === 'projects' && (
@@ -1189,6 +1488,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+
+
               {/* About & Social */}
               <div className="space-y-4">
                 <h3 className="text-bronze-500 font-bold uppercase text-sm tracking-wider mb-4">About & Social</h3>
@@ -1474,127 +1775,472 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
           </div>
+
         )}
-      </div>
 
-      {activeTab === 'themes' && (
-        <div className="space-y-8 animate-fade-in">
-          <div className="bg-garage-900 p-8 border border-garage-800">
-            <h3 className="text-xl font-bold text-white uppercase tracking-widest mb-6 border-b border-garage-800 pb-4">Themes & Appearance</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              {/* Global Theme Settings */}
-              <div className="col-span-2">
-                <h4 className="text-sm font-bold text-bronze-500 uppercase tracking-wider mb-4">Global Settings</h4>
-              </div>
-
-              <div className="col-span-2">
-                <label className="block text-xs text-garage-500 uppercase mb-3">Color Theme</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {['midnight', 'stealth', 'vintage', 'neon', 'forest', 'ocean'].map(theme => (
-                    <button
-                      key={theme}
-                      onClick={() => setGeneralForm({ ...generalForm, theme: theme as any })}
-                      className={`p-3 border rounded-sm flex flex-col items-center gap-2 transition-all ${generalForm.theme === theme
-                        ? 'border-bronze-500 bg-garage-900 ring-1 ring-bronze-500/50'
-                        : 'border-garage-800 bg-garage-950 hover:border-garage-600'
-                        }`}
-                    >
-                      <div className={`w-full h-8 rounded-sm shadow-inner ${theme === 'midnight' ? 'bg-gradient-to-r from-garage-950 to-bronze-900' :
-                        theme === 'stealth' ? 'bg-gradient-to-r from-gray-950 to-gray-800' :
-                          theme === 'vintage' ? 'bg-gradient-to-r from-[#3b2a22] to-[#f59e0b]' :
-                            theme === 'neon' ? 'bg-gradient-to-r from-black to-[#06b6d4]' :
-                              theme === 'forest' ? 'bg-gradient-to-r from-[#052e16] to-[#eab308]' :
-                                'bg-gradient-to-r from-[#020410] to-[#8b5cf6]'
-                        }`}></div>
-                      <span className="text-[10px] uppercase font-bold text-garage-300">{theme}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="col-span-2 md:col-span-1">
-                <label className="block text-xs text-garage-500 uppercase mb-1">Layout Style</label>
-                <select name="layoutStyle" value={generalForm.layoutStyle || 'default'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
-                  <option value="default">Default (Rich & Animated)</option>
-                  <option value="minimal">Minimal (Clean & Simple)</option>
-                </select>
-              </div>
-
-              {/* Text Effects */}
-              <div className="col-span-2 mt-6 pt-6 border-t border-garage-800">
-                <h4 className="text-sm font-bold text-bronze-500 uppercase tracking-wider mb-4">Text Effects & Previews</h4>
-              </div>
-
-              {/* Title Effect Control & Preview */}
-              <div className="col-span-2 md:col-span-1 space-y-4">
+        {activeTab === 'cerakote' && (
+          <div className="space-y-8 animate-fade-in">
+            {/* Image Management Section */}
+            <div className="bg-garage-900 p-6 rounded-sm border border-garage-800">
+              <h3 className="text-lg font-bold text-white mb-4 uppercase tracking-wider border-b border-garage-800 pb-2">Page Images</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs text-garage-500 uppercase mb-1">Title Effect (DNA)</label>
-                  <select name="helixTitleEffect" value={generalForm.helixTitleEffect || 'none'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
-                    <option value="none">None (Float)</option>
-                    <option value="idle">Idle (Breathing)</option>
-                    <option value="heat">Heat Haze</option>
-                    <option value="underglow">Underglow (Neon)</option>
-                    <option value="ignition">Ignition (Spark)</option>
-                    <option value="rev">Rev (Tachometer)</option>
-                    <option value="carbon">Carbon Fiber</option>
-                  </select>
+                  <label className="block text-garage-400 text-xs uppercase font-bold mb-2">Before Image (Helix Section)</label>
+                  <input
+                    type="text"
+                    name="cerakoteBeforeUrl"
+                    value={generalForm.cerakoteBeforeUrl || ''}
+                    onChange={handleGeneralChange}
+                    className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                    placeholder="https://..."
+                  />
+                  <p className="text-xs text-garage-500 mt-1">Background image for the top helix section.</p>
                 </div>
-
-                <div className="bg-black/50 border border-garage-800 p-6 rounded-sm flex items-center justify-center h-24 overflow-hidden">
-                  <span className={`text-2xl font-bold font-helix italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-bronze-500 to-amber-200 ${generalForm.helixTitleEffect ? `effect-${generalForm.helixTitleEffect}` : 'animate-float'}`}>
-                    PREVIEW DNA
-                  </span>
-                </div>
-                <p className="text-[10px] text-garage-500 text-center uppercase tracking-wider">Live Preview</p>
-              </div>
-
-              {/* Subtitle Effect Control & Preview */}
-              <div className="col-span-2 md:col-span-1 space-y-4">
                 <div>
-                  <label className="block text-xs text-garage-500 uppercase mb-1">Subtitle Effect (Ireland's Finest)</label>
-                  <select name="helixTextEffect" value={generalForm.helixTextEffect || 'none'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
-                    <option value="none">None</option>
-                    <option value="idle">Idle (Breathing)</option>
-                    <option value="heat">Heat Haze</option>
-                    <option value="underglow">Underglow (Neon)</option>
-                    <option value="ignition">Ignition (Spark)</option>
-                    <option value="rev">Rev (Tachometer)</option>
-                    <option value="carbon">Carbon Fiber</option>
-                  </select>
+                  <label className="block text-garage-400 text-xs uppercase font-bold mb-2">After Image URL (Middle)</label>
+                  <input
+                    type="text"
+                    name="cerakoteAfterUrl"
+                    value={generalForm.cerakoteAfterUrl || ''}
+                    onChange={handleGeneralChange}
+                    className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                    placeholder="https://..."
+                  />
+                  <p className="text-xs text-garage-500 mt-1">Image displayed in the comparison/middle section.</p>
                 </div>
-
-                <div className="bg-black/50 border border-garage-800 p-6 rounded-sm flex items-center justify-center h-24 overflow-hidden">
-                  <span className={`text-2xl font-bold font-helix italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-white to-orange-500 ${generalForm.helixTextEffect ? `effect-${generalForm.helixTextEffect}` : ''}`}>
-                    IRELAND'S FINEST
-                  </span>
-                </div>
-                <p className="text-[10px] text-garage-500 text-center uppercase tracking-wider">Live Preview</p>
               </div>
-
+              <div className="flex justify-end mt-4">
+                <button onClick={handleSaveHelix} className="bg-bronze-600 hover:bg-bronze-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-xs tracking-wider">Save Images</button>
+              </div>
             </div>
-            <div className="mt-6 flex justify-end">
-              <button onClick={handleSaveThemes} className="bg-bronze-600 text-white px-6 py-3 font-bold uppercase tracking-widest hover:bg-bronze-500 transition-colors duration-300">
-                Save Themes & Appearance
-              </button>
+
+            {/* Stock Management Section */}
+            <div className="bg-garage-900 border border-garage-800 p-8 rounded-sm">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white uppercase">Cerakote Stock Management</h2>
+                  <p className="text-garage-400 text-sm mt-1">Toggle colors to mark them as Out of Stock.</p>
+                </div>
+                <button onClick={handleSaveCerakoteStock} className="bg-bronze-600 hover:bg-bronze-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-xs tracking-wider">Save Stock Changes</button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {CERAKOTE_COLORS.map(color => {
+                  const isOutOfStock = generalForm.cerakote_stock && generalForm.cerakote_stock[color.code] === false;
+                  return (
+                    <div key={color.code} className={`p-4 border rounded-sm flex items-center justify-between transition-colors ${isOutOfStock ? 'bg-red-900/10 border-red-900/30' : 'bg-garage-950 border-garage-800'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-cover bg-center border border-garage-700" style={{ backgroundImage: `url(${color.image})` }}></div>
+                        <div>
+                          <h4 className={`font-bold text-sm ${isOutOfStock ? 'text-red-400' : 'text-white'}`}>{color.name}</h4>
+                          <p className="text-xs text-garage-500 font-mono">{color.code}</p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={!isOutOfStock}
+                          onChange={() => handleToggleCerakoteStock(color.code)}
+                        />
+                        <div className="w-11 h-6 bg-red-900/50 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        <span className="ml-2 text-xs font-bold uppercase w-16 text-right">{!isOutOfStock ? 'In Stock' : 'Out'}</span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Products Management Section */}
+            <div className="bg-garage-900 border border-garage-800 p-8 rounded-sm">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white uppercase">Cerakote Products</h2>
+                  <p className="text-garage-400 text-sm mt-1">Manage additional products or kits.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingId('new_product');
+                    setProductForm({});
+                  }}
+                  className="bg-bronze-600 hover:bg-bronze-500 text-white px-4 py-2 rounded-sm font-bold uppercase text-xs tracking-wider flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Add Product
+                </button>
+              </div>
+
+              {editingId ? (
+                <div className="bg-garage-950 border border-garage-800 p-6 rounded-sm mb-8 animate-fade-in">
+                  <h3 className="text-bronze-500 font-bold uppercase text-sm mb-4">{editingId === 'new_product' ? 'New Product' : 'Edit Product'}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="col-span-1">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Product Name</label>
+                      <input
+                        value={productForm.name || ''}
+                        onChange={e => setProductForm({ ...productForm, name: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Price</label>
+                      <input
+                        value={productForm.price || ''}
+                        onChange={e => setProductForm({ ...productForm, price: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                        placeholder="e.g. €50.00"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Image URL</label>
+                      <input
+                        value={productForm.image_url || ''}
+                        onChange={e => setProductForm({ ...productForm, image_url: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Description</label>
+                      <textarea
+                        value={productForm.description || ''}
+                        onChange={e => setProductForm({ ...productForm, description: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none h-24"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <button onClick={() => setEditingId(null)} className="px-4 py-2 text-garage-400 hover:text-white text-xs font-bold uppercase">Cancel</button>
+                    <button onClick={handleSaveProduct} className="bg-bronze-600 hover:bg-bronze-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-xs tracking-wider">Save Product</button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-4">
+                {cerakoteProducts.length === 0 ? (
+                  <p className="text-garage-500 text-sm text-center py-8">No products added yet.</p>
+                ) : (
+                  cerakoteProducts.map(product => (
+                    <div key={product.id} className="bg-garage-950 border border-garage-800 p-4 rounded-sm flex justify-between items-center group hover:border-garage-700 transition-colors">
+                      <div className="flex items-center gap-4">
+                        {product.image_url && (
+                          <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover rounded-sm border border-garage-800" />
+                        )}
+                        <div>
+                          <h4 className="font-bold text-white text-sm">{product.name}</h4>
+                          <p className="text-xs text-bronze-500 font-mono">{product.price}</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => {
+                            setEditingId(product.id);
+                            setProductForm(product);
+                          }}
+                          className="p-2 text-garage-400 hover:text-white bg-garage-900 hover:bg-garage-800 rounded-sm"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="p-2 text-garage-400 hover:text-red-500 bg-garage-900 hover:bg-garage-800 rounded-sm"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Finishes Management Section */}
+            <div className="bg-garage-900 border border-garage-800 p-8 rounded-sm">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white uppercase">Cerakote Finishes</h2>
+                  <p className="text-garage-400 text-sm mt-1">Manage available color finishes.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingId('new_finish');
+                    setFinishForm({});
+                  }}
+                  className="bg-bronze-600 hover:bg-bronze-500 text-white px-4 py-2 rounded-sm font-bold uppercase text-xs tracking-wider flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Add Finish
+                </button>
+              </div>
+
+              {editingId === 'new_finish' || (editingId && editingId.startsWith('finish_')) ? (
+                <div className="bg-garage-950 border border-garage-800 p-6 rounded-sm mb-8 animate-fade-in">
+                  <h3 className="text-bronze-500 font-bold uppercase text-sm mb-4">{editingId === 'new_finish' ? 'New Finish' : 'Edit Finish'}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="col-span-1">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Finish Name</label>
+                      <input
+                        value={finishForm.name || ''}
+                        onChange={e => setFinishForm({ ...finishForm, name: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Code</label>
+                      <input
+                        value={finishForm.code || ''}
+                        onChange={e => setFinishForm({ ...finishForm, code: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Image URL</label>
+                      <input
+                        value={finishForm.image_url || ''}
+                        onChange={e => setFinishForm({ ...finishForm, image_url: e.target.value })}
+                        className="w-full bg-garage-900 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <button onClick={() => setEditingId(null)} className="px-4 py-2 text-garage-400 hover:text-white text-xs font-bold uppercase">Cancel</button>
+                    <button onClick={handleSaveFinish} className="bg-bronze-600 hover:bg-bronze-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-xs tracking-wider">Save Finish</button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {cerakoteFinishes.map(finish => (
+                  <div key={finish.id} className="bg-garage-950 border border-garage-800 p-3 rounded-sm group hover:border-garage-700 transition-colors relative">
+                    <div className="aspect-square mb-2 overflow-hidden rounded-sm">
+                      <img src={finish.image_url} alt={finish.name} className="w-full h-full object-cover" />
+                    </div>
+                    <h4 className="font-bold text-white text-xs truncate">{finish.name}</h4>
+                    <p className="text-[10px] text-bronze-500 font-mono">{finish.code}</p>
+
+                    <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded p-1">
+                      <button
+                        onClick={() => {
+                          setEditingId('finish_' + finish.id);
+                          setFinishForm(finish);
+                        }}
+                        className="p-1 text-white hover:text-bronze-500"
+                      >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFinish(finish.id)}
+                        className="p-1 text-white hover:text-red-500"
+                      >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Footer Logout */}
-      <div className="mt-12 border-t border-garage-800 pt-8 flex justify-center pb-8">
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-2 px-6 py-3 border border-red-900/50 text-red-500 hover:bg-red-950/30 hover:border-red-500 transition-all duration-300 rounded-sm uppercase text-xs font-bold tracking-widest"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
-      </div>
-    </div>
+
+        {
+          activeTab === 'themes' && (
+            <div className="space-y-8 animate-fade-in">
+              <div className="bg-garage-900 p-6 rounded-sm border border-garage-800">
+                <h3 className="text-lg font-bold text-white mb-4 uppercase tracking-wider border-b border-garage-800 pb-2">Video Settings</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-garage-400 text-xs uppercase font-bold mb-2">Main Video URL</label>
+                    <input
+                      type="text"
+                      name="helixVideoUrl"
+                      value={generalForm.helixVideoUrl || ''}
+                      onChange={handleGeneralChange}
+                      className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none"
+                      placeholder="/helix-video.mp4"
+                    />
+                    <p className="text-xs text-garage-500 mt-1">Path to the main background video file.</p>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-garage-950 p-4 border border-garage-800 rounded-sm">
+                    <div>
+                      <span className="block text-white font-bold uppercase text-sm">Show Extra Video Sections</span>
+                      <span className="text-garage-400 text-xs">Enable the 3 additional videos below the main section.</span>
+                    </div>
+                    <button
+                      onClick={() => setGeneralForm(prev => ({ ...prev, showExtraVideos: !prev.showExtraVideos }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${generalForm.showExtraVideos ? 'bg-bronze-500' : 'bg-garage-700'}`}
+                    >
+                      <span className={`${generalForm.showExtraVideos ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-garage-950 p-4 border border-garage-800 rounded-sm">
+                    <div>
+                      <span className="block text-white font-bold uppercase text-sm">Show Sound Gallery</span>
+                      <span className="text-garage-400 text-xs">Toggle the Sound Check section on the Services page.</span>
+                    </div>
+                    <button
+                      onClick={() => setGeneralForm(prev => ({ ...prev, showSoundGallery: !prev.showSoundGallery }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${generalForm.showSoundGallery ? 'bg-bronze-500' : 'bg-garage-700'}`}
+                    >
+                      <span className={`${generalForm.showSoundGallery ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex justify-end mt-4">
+                  <button onClick={handleSaveHelix} className="bg-bronze-600 hover:bg-bronze-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-xs tracking-wider">Save Video Settings</button>
+                </div>
+              </div>
+
+
+              <div className="bg-garage-900 p-8 border border-garage-800">
+                <h3 className="text-xl font-bold text-white uppercase tracking-widest mb-6 border-b border-garage-800 pb-4">Themes & Appearance</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  {/* Global Theme Settings */}
+                  <div className="col-span-2">
+                    <h4 className="text-sm font-bold text-bronze-500 uppercase tracking-wider mb-4">Global Settings</h4>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs text-garage-500 uppercase mb-3">Color Theme</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {['midnight', 'stealth', 'vintage', 'neon', 'forest', 'ocean'].map(theme => (
+                        <button
+                          key={theme}
+                          onClick={() => setGeneralForm({ ...generalForm, theme: theme as any })}
+                          className={`p-3 border rounded-sm flex flex-col items-center gap-2 transition-all ${generalForm.theme === theme
+                            ? 'border-bronze-500 bg-garage-900 ring-1 ring-bronze-500/50'
+                            : 'border-garage-800 bg-garage-950 hover:border-garage-600'
+                            }`}
+                        >
+                          <div className={`w-full h-8 rounded-sm shadow-inner ${theme === 'midnight' ? 'bg-gradient-to-r from-garage-950 to-bronze-900' :
+                            theme === 'stealth' ? 'bg-gradient-to-r from-gray-950 to-gray-800' :
+                              theme === 'vintage' ? 'bg-gradient-to-r from-[#3b2a22] to-[#f59e0b]' :
+                                theme === 'neon' ? 'bg-gradient-to-r from-black to-[#06b6d4]' :
+                                  theme === 'forest' ? 'bg-gradient-to-r from-[#052e16] to-[#eab308]' :
+                                    'bg-gradient-to-r from-[#020410] to-[#8b5cf6]'
+                            }`}></div>
+                          <span className="text-[10px] uppercase font-bold text-garage-300">{theme}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs text-garage-500 uppercase mb-1">Layout Style</label>
+                    <select name="layoutStyle" value={generalForm.layoutStyle || 'default'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
+                      <option value="default">Default (Rich & Animated)</option>
+                      <option value="minimal">Minimal (Clean & Simple)</option>
+                    </select>
+                  </div>
+
+                  {/* Text Effects */}
+                  <div className="col-span-2 mt-6 pt-6 border-t border-garage-800">
+                    <h4 className="text-sm font-bold text-bronze-500 uppercase tracking-wider mb-4">Text Effects & Previews</h4>
+                  </div>
+
+                  {/* Title Effect Control & Preview */}
+                  <div className="col-span-2 md:col-span-1 space-y-4">
+                    <div>
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Title Effect (DNA)</label>
+                      <select name="helixTitleEffect" value={generalForm.helixTitleEffect || 'none'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
+                        <option value="none">None (Float)</option>
+                        <option value="idle">Idle (Breathing)</option>
+                        <option value="heat">Heat Haze</option>
+                        <option value="underglow">Underglow (Neon)</option>
+                        <option value="ignition">Ignition (Spark)</option>
+                        <option value="rev">Rev (Tachometer)</option>
+                        <option value="carbon">Carbon Fiber</option>
+                      </select>
+                    </div>
+
+                    <div className="bg-black/50 border border-garage-800 p-6 rounded-sm flex items-center justify-center h-24">
+                      <span className={`text-2xl font-bold font-helix italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-bronze-500 to-amber-200 ${generalForm.helixTitleEffect ? `effect-${generalForm.helixTitleEffect}` : 'animate-float'}`}>
+                        PREVIEW DNA
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-garage-500 text-center uppercase tracking-wider">Live Preview</p>
+                  </div>
+
+                  {/* Subtitle Effect Control & Preview */}
+                  <div className="col-span-2 md:col-span-1 space-y-4">
+                    <div>
+                      <label className="block text-xs text-garage-500 uppercase mb-1">Subtitle Effect (Ireland's Finest)</label>
+                      <select name="helixTextEffect" value={generalForm.helixTextEffect || 'none'} onChange={handleGeneralChange} className="w-full bg-garage-950 border border-garage-700 p-3 text-white focus:border-bronze-500 outline-none">
+                        <option value="none">None</option>
+                        <option value="idle">Idle (Breathing)</option>
+                        <option value="heat">Heat Haze</option>
+                        <option value="underglow">Underglow (Neon)</option>
+                        <option value="ignition">Ignition (Spark)</option>
+                        <option value="rev">Rev (Tachometer)</option>
+                        <option value="carbon">Carbon Fiber</option>
+                      </select>
+                    </div>
+
+                    <div className="bg-black/50 border border-garage-800 p-6 rounded-sm flex items-center justify-center h-24">
+                      <span className={`text-2xl font-bold font-helix italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-white to-orange-500 ${generalForm.helixTextEffect ? `effect-${generalForm.helixTextEffect}` : ''}`}>
+                        IRELAND'S FINEST
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-garage-500 text-center uppercase tracking-wider">Live Preview</p>
+                  </div>
+
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <button onClick={handleSaveThemes} className="bg-bronze-600 text-white px-6 py-3 font-bold uppercase tracking-widest hover:bg-bronze-500 transition-colors duration-300">
+                    Save Themes & Appearance
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* --- TEAM TAB --- */}
+        {activeTab === 'team' && currentUserRole?.permissions.manage_team && (
+          <TeamManagement currentUserRole={currentUserRole} />
+        )}
+
+        {/* Footer Logout */}
+        <div className="mt-12 border-t border-garage-800 pt-8 flex justify-center pb-8">
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 px-6 py-3 border border-red-900/50 text-red-500 hover:bg-red-950/30 hover:border-red-500 transition-all duration-300 rounded-sm uppercase text-xs font-bold tracking-widest"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
+        </div>
+
+        {/* Delete Confirmation Modal */}
+        {deletingId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-garage-900 border border-garage-800 p-8 rounded-sm max-w-md w-full shadow-2xl transform transition-all animate-in zoom-in-95 duration-200">
+              <h3 className="text-xl font-bold text-white mb-4">Confirm Deletion</h3>
+              <p className="text-garage-400 mb-8">Are you sure you want to delete this product? This action cannot be undone.</p>
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => setDeletingId(null)}
+                  className="px-4 py-2 text-garage-400 hover:text-white text-sm font-bold uppercase tracking-wider"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteProduct}
+                  className="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-sm font-bold uppercase text-sm tracking-wider"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div >
+    </div >
   );
 };
 
