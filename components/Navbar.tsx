@@ -46,7 +46,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, contactInfo }) => {
                 logoUrl={contactInfo?.logoUrl}
               />
             </div>
-            <div className="hidden md:block">
+            <div>
               <div className="flex flex-col">
                 <span className="text-2xl font-bold tracking-wider text-white leading-none">HELIX</span>
                 <span className="text-xs font-light tracking-[0.3em] text-garage-400 leading-none mt-1">MOTORCYCLES</span>
